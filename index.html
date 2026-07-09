@@ -1,0 +1,907 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>สมุดบัญชี — บันทึกรายรับรายจ่ายรายเดือน</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Noto+Serif+Thai:wght@500;600;700&family=Noto+Sans+Thai:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+  /* ===================== Design Tokens ===================== */
+  :root{
+    --navy:#1C2541;        /* ปกสมุดบัญชี */
+    --navy-2:#263457;       /* navy อ่อนลงสำหรับ hover */
+    --paper:#F1EDE2;        /* กระดาษ */
+    --paper-2:#E9E3D3;      /* กระดาษเข้มขึ้นเล็กน้อย */
+    --line:#CDBFA0;         /* เส้นบรรทัดสมุดบัญชี */
+    --gold:#B8935B;         /* ตราปั๊ม / accent หลัก */
+    --gold-dk:#8F6E3E;
+    --green:#3F6B4F;        /* รายรับ */
+    --green-bg:#E4ECE3;
+    --rust:#9C4A3F;         /* รายจ่ายรวม */
+    --rust-bg:#F1E1DC;
+    --necessary:#3E6B78;    /* รายจ่ายจำเป็น */
+    --necessary-bg:#DFEAEC;
+    --entertain:#7B5C93;    /* รายจ่ายบันเทิง */
+    --entertain-bg:#EBE2F0;
+    --ink:#2B2117;          /* ตัวอักษรหลัก */
+  }
+
+  body{
+    background-color: var(--paper);
+    background-image:
+      radial-gradient(circle at 100% 0%, rgba(184,147,91,0.08), transparent 45%),
+      repeating-linear-gradient(180deg, transparent 0, transparent 34px, var(--line) 34px, var(--line) 35px);
+    font-family:'Noto Sans Thai', sans-serif;
+    color: var(--ink);
+  }
+  .font-display{ font-family:'Noto Serif Thai', serif; }
+  .font-mono{ font-family:'IBM Plex Mono', monospace; }
+
+  .ledger-spine{ background: linear-gradient(180deg, var(--navy) 0%, var(--navy-2) 100%); }
+  .ledger-spine::after{
+    content:""; position:absolute; inset:0;
+    background-image: repeating-linear-gradient(180deg, rgba(255,255,255,0.035) 0, rgba(255,255,255,0.035) 1px, transparent 1px, transparent 26px);
+    pointer-events:none;
+  }
+
+  .month-tab{ transition: transform .15s ease, box-shadow .15s ease; }
+  .month-tab:hover{ transform: translateY(-2px); }
+
+  .stamp{
+    border: 3px double var(--gold);
+    border-radius: 9999px;
+    color: var(--gold-dk);
+    transform: rotate(-4deg);
+    box-shadow: 0 0 0 1px rgba(184,147,91,0.25) inset;
+    transition: transform .2s ease;
+  }
+  .stamp.stamp-neg{ border-color: var(--rust); color: var(--rust); }
+
+  .perforation{
+    background-image: radial-gradient(circle, var(--paper) 2.5px, transparent 2.6px);
+    background-size: 14px 14px; background-position: center; height: 1px;
+  }
+
+  input[type="date"]::-webkit-calendar-picker-indicator{ filter: invert(0.3) sepia(1) saturate(2); }
+  ::selection{ background: rgba(184,147,91,0.35); }
+
+  .ledger-row:nth-child(even){ background: rgba(205,191,160,0.18); }
+  .ledger-row{ border-bottom: 1px dashed var(--line); transition: background-color .15s ease; }
+  .ledger-row:hover{ background: rgba(184,147,91,0.09); }
+
+  a:focus-visible, button:focus-visible, input:focus-visible, select:focus-visible{
+    outline: 2px solid var(--gold-dk); outline-offset: 2px;
+  }
+  @media (prefers-reduced-motion: reduce){ *{ transition: none !important; animation: none !important; } }
+
+  .type-radio:checked + label.type-income{ background: var(--green); color:#fff; border-color: var(--green); box-shadow:0 2px 8px rgba(63,107,79,.25); }
+  .type-radio:checked + label.type-expense{ background: var(--rust); color:#fff; border-color: var(--rust); box-shadow:0 2px 8px rgba(156,74,63,.25); }
+
+  .cat-radio:checked + label.cat-necessary{ background: var(--necessary); color:#fff; border-color: var(--necessary); }
+  .cat-radio:checked + label.cat-entertain{ background: var(--entertain); color:#fff; border-color: var(--entertain); }
+
+  .scrollbar-thin::-webkit-scrollbar{ height:6px; width:6px; }
+  .scrollbar-thin::-webkit-scrollbar-thumb{ background: var(--line); border-radius: 4px; }
+
+  .toolbar-btn{ transition: transform .12s ease, box-shadow .12s ease; }
+  .toolbar-btn:hover{ transform: translateY(-1px); box-shadow: 0 4px 10px rgba(28,37,65,0.08); }
+  .toolbar-btn:active{ transform: translateY(0); }
+
+  .modal-overlay{ background: rgba(28,37,65,0.55); backdrop-filter: blur(2px); }
+  .modal-card{ animation: modalIn .18s ease; }
+  @keyframes modalIn{ from{ opacity:0; transform: translateY(8px) scale(.98);} to{ opacity:1; transform: translateY(0) scale(1);} }
+
+  .sync-dot{ width:8px; height:8px; border-radius:9999px; display:inline-block; }
+  .sync-dot.on{ background: var(--green); box-shadow:0 0 0 3px var(--green-bg); }
+  .sync-dot.off{ background: #B7ADA0; }
+
+  .breakdown-bar{ height:8px; border-radius:9999px; overflow:hidden; background: var(--paper-2); display:flex; }
+</style>
+</head>
+<body class="min-h-screen">
+
+<!-- ===================== ปกสมุดบัญชี (Header) ===================== -->
+<header class="ledger-spine relative overflow-hidden text-[#EDE6D3]">
+  <div class="max-w-5xl mx-auto px-5 sm:px-8 py-8 relative flex items-start justify-between gap-4">
+    <div>
+      <p class="font-mono text-[11px] tracking-[0.25em] uppercase text-[#B8935B]">สมุดบัญชีส่วนบุคคล</p>
+      <h1 class="font-display text-3xl sm:text-4xl font-700 mt-1">บันทึกรายรับ–รายจ่ายรายเดือน</h1>
+      <p class="text-sm text-[#C7BFA8] mt-2 max-w-xl">จดทุกบาททุกสตางค์ที่เข้าและออกในแต่ละวัน แยกได้ว่ารายจ่ายไหนจำเป็น รายจ่ายไหนเพื่อความสุข แล้วซิงค์ดูได้ทุกอุปกรณ์</p>
+    </div>
+    <button id="openSyncBtn" type="button"
+      class="toolbar-btn shrink-0 flex items-center gap-2 bg-white/10 hover:bg-white/15 border border-white/20 text-[#EDE6D3] text-xs font-500 px-3.5 py-2.5 rounded-full">
+      <span id="syncDot" class="sync-dot off"></span>
+      <span id="syncLabel">☁️ ยังไม่ซิงค์</span>
+    </button>
+  </div>
+</header>
+
+<main class="max-w-5xl mx-auto px-5 sm:px-8 py-8 space-y-8">
+
+  <!-- ===================== ตัวเลือกเดือน ===================== -->
+  <section class="flex items-center justify-between gap-3">
+    <button id="prevMonthBtn" aria-label="เดือนก่อนหน้า"
+      class="month-tab shrink-0 w-10 h-10 rounded-full bg-white border border-[var(--line)] flex items-center justify-center text-[var(--navy)] shadow-sm">‹</button>
+
+    <div class="flex-1 text-center">
+      <p class="font-mono text-[11px] uppercase tracking-widest text-[var(--gold-dk)]">หน้าบัญชีประจำเดือน</p>
+      <h2 id="currentMonthLabel" class="font-display text-2xl font-600 text-[var(--navy)]">—</h2>
+    </div>
+
+    <button id="nextMonthBtn" aria-label="เดือนถัดไป"
+      class="month-tab shrink-0 w-10 h-10 rounded-full bg-white border border-[var(--line)] flex items-center justify-center text-[var(--navy)] shadow-sm">›</button>
+  </section>
+
+  <!-- ===================== เครื่องมือ: ส่งออก/นำเข้าไฟล์สำรอง ===================== -->
+  <section class="flex flex-wrap items-center justify-center gap-2.5 -mt-2">
+    <button id="exportBtn" type="button" class="toolbar-btn flex items-center gap-1.5 text-xs font-500 px-3.5 py-2 rounded-full border border-[var(--line)] bg-white text-[var(--navy)] shadow-sm">📤 ส่งออกไฟล์สำรอง</button>
+    <button id="importBtn" type="button" class="toolbar-btn flex items-center gap-1.5 text-xs font-500 px-3.5 py-2 rounded-full border border-[var(--line)] bg-white text-[var(--navy)] shadow-sm">📥 นำเข้าไฟล์สำรอง</button>
+    <input id="importFileInput" type="file" accept="application/json" class="hidden">
+  </section>
+
+  <div id="statusBanner" class="hidden text-sm rounded-lg px-4 py-2.5 text-center"></div>
+
+  <!-- ===================== Dashboard สรุปยอด ===================== -->
+  <section class="grid grid-cols-1 sm:grid-cols-3 gap-4">
+    <div class="bg-white/70 border border-[var(--line)] rounded-2xl p-5 shadow-sm">
+      <p class="font-mono text-[11px] uppercase tracking-widest text-[var(--green)]">💰 รายรับรวม</p>
+      <p id="totalIncome" class="font-display text-2xl font-700 text-[var(--green)] mt-1">฿0.00</p>
+    </div>
+
+    <div class="bg-white/70 border border-[var(--line)] rounded-2xl p-5 shadow-sm">
+      <p class="font-mono text-[11px] uppercase tracking-widest text-[var(--rust)]">💸 รายจ่ายรวม</p>
+      <p id="totalExpense" class="font-display text-2xl font-700 text-[var(--rust)] mt-1">฿0.00</p>
+
+      <!-- แถบสัดส่วนรายจ่ายจำเป็น vs บันเทิง -->
+      <div class="breakdown-bar mt-3">
+        <div id="barNecessary" style="width:0%; background:var(--necessary);"></div>
+        <div id="barEntertain" style="width:0%; background:var(--entertain);"></div>
+      </div>
+      <div class="flex justify-between mt-1.5 text-[10px] font-mono text-[var(--ink)]/60">
+        <span>🔧 จำเป็น <span id="necessaryAmt">฿0</span></span>
+        <span>🎈 บันเทิง <span id="entertainAmt">฿0</span></span>
+      </div>
+    </div>
+
+    <div class="bg-white/70 border border-[var(--line)] rounded-2xl p-5 shadow-sm flex items-center justify-between">
+      <div>
+        <p class="font-mono text-[11px] uppercase tracking-widest text-[var(--navy)]">📊 ยอดคงเหลือสุทธิ</p>
+        <p id="netBalance" class="font-display text-2xl font-700 text-[var(--navy)] mt-1">฿0.00</p>
+      </div>
+      <div id="netStamp" class="stamp w-14 h-14 shrink-0 flex items-center justify-center font-display text-[10px] font-600 text-center leading-tight">ปิดบัญชี</div>
+    </div>
+  </section>
+
+  <!-- ===================== ฟอร์มบันทึกรายวัน ===================== -->
+  <section class="bg-white border border-[var(--line)] rounded-2xl p-5 sm:p-6 shadow-sm">
+    <h3 class="font-display text-lg font-600 text-[var(--navy)] mb-4">✍️ บันทึกรายการใหม่</h3>
+
+    <form id="entryForm" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+      <div class="flex flex-col gap-1.5">
+        <label for="entryDate" class="text-xs font-500 text-[var(--ink)]/70">วันที่</label>
+        <input id="entryDate" type="date" required
+          class="border border-[var(--line)] rounded-lg px-3 py-2 bg-[var(--paper)] font-mono text-sm focus:ring-2 focus:ring-[var(--gold)] focus:outline-none">
+      </div>
+
+      <div class="flex flex-col gap-1.5">
+        <label class="text-xs font-500 text-[var(--ink)]/70">ประเภท</label>
+        <div class="flex gap-2">
+          <input class="type-radio hidden" type="radio" name="entryType" id="typeIncome" value="income" checked>
+          <label for="typeIncome" class="type-income cursor-pointer flex-1 text-center px-3 py-2 rounded-lg border border-[var(--line)] text-sm font-500 transition">รายรับ</label>
+          <input class="type-radio hidden" type="radio" name="entryType" id="typeExpense" value="expense">
+          <label for="typeExpense" class="type-expense cursor-pointer flex-1 text-center px-3 py-2 rounded-lg border border-[var(--line)] text-sm font-500 transition">รายจ่าย</label>
+        </div>
+      </div>
+
+      <div class="flex flex-col gap-1.5">
+        <label for="entryAmount" class="text-xs font-500 text-[var(--ink)]/70">จำนวนเงิน (บาท)</label>
+        <input id="entryAmount" type="number" min="0.01" step="any" required placeholder="0.00"
+          class="border border-[var(--line)] rounded-lg px-3 py-2 bg-[var(--paper)] font-mono text-sm focus:ring-2 focus:ring-[var(--gold)] focus:outline-none">
+      </div>
+
+      <div class="flex flex-col gap-1.5">
+        <label for="entryDesc" class="text-xs font-500 text-[var(--ink)]/70">รายละเอียด</label>
+        <input id="entryDesc" type="text" required placeholder="เช่น เงินเดือน, ค่าอาหาร"
+          class="border border-[var(--line)] rounded-lg px-3 py-2 bg-[var(--paper)] text-sm focus:ring-2 focus:ring-[var(--gold)] focus:outline-none">
+      </div>
+
+      <!-- ช่องเลือกหมวดรายจ่าย แสดงเฉพาะตอนเลือกประเภท "รายจ่าย" -->
+      <div id="categoryField" class="hidden sm:col-span-2 lg:col-span-4 flex flex-col gap-1.5">
+        <label class="text-xs font-500 text-[var(--ink)]/70">หมวดรายจ่าย</label>
+        <div class="flex gap-2 max-w-sm">
+          <input class="cat-radio hidden" type="radio" name="entryCategory" id="catNecessary" value="necessary" checked>
+          <label for="catNecessary" class="cat-necessary cursor-pointer flex-1 text-center px-3 py-2 rounded-lg border border-[var(--line)] text-sm font-500 transition">🔧 จำเป็น</label>
+          <input class="cat-radio hidden" type="radio" name="entryCategory" id="catEntertain" value="entertainment">
+          <label for="catEntertain" class="cat-entertain cursor-pointer flex-1 text-center px-3 py-2 rounded-lg border border-[var(--line)] text-sm font-500 transition">🎈 บันเทิง</label>
+        </div>
+      </div>
+
+      <div class="sm:col-span-2 lg:col-span-4 flex justify-end">
+        <button type="submit" class="toolbar-btn bg-[var(--navy)] hover:bg-[var(--navy-2)] text-white font-500 text-sm px-6 py-2.5 rounded-lg shadow-sm">+ บันทึกรายการ</button>
+      </div>
+    </form>
+  </section>
+
+  <div class="perforation"></div>
+
+  <!-- ===================== ตารายการของเดือน ===================== -->
+  <section class="bg-white border border-[var(--line)] rounded-2xl p-5 sm:p-6 shadow-sm">
+    <div class="flex items-center justify-between mb-4">
+      <h3 class="font-display text-lg font-600 text-[var(--navy)]">รายการเดือนนี้</h3>
+      <span id="entryCount" class="font-mono text-xs text-[var(--ink)]/50">0 รายการ</span>
+    </div>
+
+    <div class="overflow-x-auto scrollbar-thin">
+      <table class="w-full text-sm">
+        <thead>
+          <tr class="text-left text-[var(--ink)]/60 border-b-2 border-[var(--line)]">
+            <th class="font-mono font-500 text-xs uppercase py-2 pr-3">วันที่</th>
+            <th class="font-mono font-500 text-xs uppercase py-2 pr-3">ประเภท</th>
+            <th class="font-mono font-500 text-xs uppercase py-2 pr-3">รายละเอียด</th>
+            <th class="font-mono font-500 text-xs uppercase py-2 pr-3 text-right">จำนวนเงิน</th>
+            <th class="font-mono font-500 text-xs uppercase py-2 pl-3 w-10"></th>
+          </tr>
+        </thead>
+        <tbody id="entryTableBody"></tbody>
+      </table>
+    </div>
+
+    <p id="emptyState" class="hidden text-center text-sm text-[var(--ink)]/50 py-10">หน้านี้ยังไม่มีรายการ — เริ่มบันทึกรายการแรกของเดือนนี้ได้เลย</p>
+  </section>
+
+  <footer class="text-center font-mono text-[11px] text-[var(--ink)]/40 pb-6">
+    ข้อมูลบันทึกไว้ในเครื่องนี้เสมอ (LocalStorage) ส่วนการซิงค์ข้ามอุปกรณ์เป็นบริการเสริมแบบไม่เข้ารหัสผ่านเซิร์ฟเวอร์ฟรีของบุคคลที่สาม
+  </footer>
+</main>
+
+<!-- ===================== Modal: ตั้งค่าการซิงค์ ===================== -->
+<div id="syncModalOverlay" class="hidden fixed inset-0 modal-overlay flex items-center justify-center p-4 z-50">
+  <div class="modal-card bg-[var(--paper)] border border-[var(--line)] rounded-2xl p-6 max-w-md w-full shadow-xl">
+    <div class="flex items-center justify-between mb-1">
+      <h3 class="font-display text-xl font-700 text-[var(--navy)]">☁️ ซิงค์ข้อมูลข้ามอุปกรณ์</h3>
+      <button id="closeSyncBtn" aria-label="ปิด" class="text-[var(--ink)]/50 hover:text-[var(--ink)] text-xl leading-none">✕</button>
+    </div>
+    <p class="text-xs text-[var(--ink)]/60 mb-4">ใช้ "รหัสซิงค์" เดียวกันในทุกอุปกรณ์ (Windows, iPhone, iPad ฯลฯ) เพื่อให้ข้อมูลอัปเดตตรงกัน ข้อมูลจะถูกเก็บไว้บนเซิร์ฟเวอร์ฟรีของบุคคลที่สาม (kvdb.io) แบบไม่เข้ารหัส — ห้ามแชร์รหัสนี้กับผู้อื่น และไม่ควรใช้กับข้อมูลอ่อนไหวมาก</p>
+
+    <!-- สถานะยังไม่เชื่อมต่อ -->
+    <div id="syncDisconnectedView" class="space-y-4">
+      <div>
+        <button id="createSyncBtn" type="button" class="w-full toolbar-btn bg-[var(--navy)] hover:bg-[var(--navy-2)] text-white text-sm font-500 px-4 py-2.5 rounded-lg">🆕 สร้างรหัสซิงค์ใหม่ (เครื่องแรก)</button>
+        <p class="text-[11px] text-[var(--ink)]/50 mt-1.5">กดจากอุปกรณ์เครื่องแรกที่มีข้อมูลอยู่แล้ว จะได้รหัสมาไปกรอกในเครื่องอื่น</p>
+      </div>
+      <div class="flex items-center gap-2 text-[var(--ink)]/40 text-xs">
+        <div class="flex-1 h-px bg-[var(--line)]"></div> หรือ <div class="flex-1 h-px bg-[var(--line)]"></div>
+      </div>
+      <div>
+        <label class="text-xs font-500 text-[var(--ink)]/70">มีรหัสซิงค์อยู่แล้ว (จากอุปกรณ์อื่น)</label>
+        <div class="flex gap-2 mt-1.5">
+          <input id="syncCodeInput" type="text" placeholder="วางรหัสซิงค์ที่นี่"
+            class="flex-1 border border-[var(--line)] rounded-lg px-3 py-2 bg-white font-mono text-sm focus:ring-2 focus:ring-[var(--gold)] focus:outline-none">
+          <button id="connectSyncBtn" type="button" class="toolbar-btn bg-[var(--gold)] hover:bg-[var(--gold-dk)] text-white text-sm font-500 px-4 py-2 rounded-lg">เชื่อมต่อ</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- สถานะเชื่อมต่อแล้ว -->
+    <div id="syncConnectedView" class="hidden space-y-4">
+      <div>
+        <label class="text-xs font-500 text-[var(--ink)]/70">รหัสซิงค์ของคุณ</label>
+        <div class="flex gap-2 mt-1.5">
+          <input id="syncCodeDisplay" type="text" readonly
+            class="flex-1 border border-[var(--line)] rounded-lg px-3 py-2 bg-[var(--paper-2)] font-mono text-xs focus:outline-none">
+          <button id="copySyncBtn" type="button" class="toolbar-btn bg-white border border-[var(--line)] text-sm px-3 py-2 rounded-lg">คัดลอก</button>
+        </div>
+        <p class="text-[11px] text-[var(--ink)]/50 mt-1.5">นำรหัสนี้ไปกรอกที่อุปกรณ์อื่นเพื่อให้ข้อมูลซิงค์กัน</p>
+      </div>
+      <div class="flex gap-2">
+        <button id="manualSyncBtn" type="button" class="flex-1 toolbar-btn bg-[var(--navy)] hover:bg-[var(--navy-2)] text-white text-sm font-500 px-4 py-2.5 rounded-lg">🔄 ซิงค์ตอนนี้</button>
+        <button id="disconnectSyncBtn" type="button" class="toolbar-btn bg-white border border-[var(--rust)] text-[var(--rust)] text-sm font-500 px-4 py-2.5 rounded-lg">เลิกซิงค์</button>
+      </div>
+      <p id="lastSyncedText" class="text-[11px] text-[var(--ink)]/50 text-center"></p>
+    </div>
+  </div>
+</div>
+
+<script>
+/* ============================================================
+   ระบบบันทึกและคำนวณรายรับ-รายจ่ายรายเดือน (พร้อมหมวดรายจ่าย + ซิงค์ข้ามอุปกรณ์)
+
+   โครงสร้างข้อมูลใน LocalStorage:
+   - "budget_transactions": array ของ
+       { id, date:"YYYY-MM-DD", type:"income"|"expense",
+         category:"necessary"|"entertainment"|null,
+         amount:number, desc:string,
+         updatedAt:number(ms),   // ใช้ตัดสินว่าเวอร์ชันไหนใหม่กว่าตอน merge
+         deleted:boolean }       // ลบแบบ soft-delete เพื่อให้การซิงค์รู้ว่าเคยลบไปแล้ว
+   - "budget_sync_bucket": รหัสซิงค์ (bucket id ของ kvdb.io) หรือไม่มีเลยถ้ายังไม่ได้เชื่อม
+   ============================================================ */
+
+const STORAGE_KEY = "budget_transactions";
+const SYNC_KEY = "budget_sync_bucket";
+const KVDB_BASE = "https://kvdb.io";
+const THAI_MONTHS = ["มกราคม","กุมภาพันธ์","มีนาคม","เมษายน","พฤษภาคม","มิถุนายน","กรกฎาคม","สิงหาคม","กันยายน","ตุลาคม","พฤศจิกายน","ธันวาคม"];
+
+let currentViewDate = new Date();
+currentViewDate.setDate(1); // ตรึงไว้ที่วันที่ 1 ของเดือน กันปัญหาการเลื่อนเดือนคลาดเคลื่อน
+
+let syncBucket = localStorage.getItem(SYNC_KEY) || null;
+let syncPollTimer = null;
+
+// ===================== ฟังก์ชันจัดการข้อมูลในเครื่อง (Local Data Layer) =====================
+
+function loadTransactions() {
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY);
+    return raw ? JSON.parse(raw) : [];
+  } catch (err) {
+    console.error("อ่านข้อมูลจาก LocalStorage ไม่สำเร็จ:", err);
+    return [];
+  }
+}
+
+function saveTransactions(transactions) {
+  try {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(transactions));
+    return true;
+  } catch (err) {
+    console.error("บันทึกข้อมูลลง LocalStorage ไม่สำเร็จ:", err);
+    return false;
+  }
+}
+
+/** เช็คว่า transaction อยู่ในปี/เดือนที่ระบุหรือไม่ */
+function isInMonth(t, year, month) {
+  const d = new Date(t.date + "T00:00:00");
+  return d.getFullYear() === year && d.getMonth() === month;
+}
+
+/** คืนค่ารายการของเดือนที่กำลังดูอยู่ สำหรับ "แสดงผล" เท่านั้น (กรองรายการที่ถูกลบออก + เรียงวันที่) */
+function getVisibleTransactionsForCurrentMonth() {
+  const year = currentViewDate.getFullYear();
+  const month = currentViewDate.getMonth();
+  return loadTransactions()
+    .filter(t => isInMonth(t, year, month) && !t.deleted)
+    .sort((a, b) => a.date.localeCompare(b.date));
+}
+
+/** คืนค่ารายการ "ดิบ" ของเดือนที่ระบุ รวมรายการที่ถูก soft-delete ด้วย ใช้ตอนซิงค์เท่านั้น */
+function getRawMonthEntries(fullArray, year, month) {
+  return fullArray.filter(t => isInMonth(t, year, month));
+}
+
+// ===================== ฟังก์ชันช่วยจัดรูปแบบ (Formatting) =====================
+
+function formatCurrency(amount) {
+  const formatted = Math.abs(amount).toLocaleString("th-TH", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  return (amount < 0 ? "-฿" : "฿") + formatted;
+}
+
+function formatCurrencyShort(amount) {
+  return "฿" + Math.round(amount).toLocaleString("th-TH");
+}
+
+function formatDateShort(dateStr) {
+  const d = new Date(dateStr + "T00:00:00");
+  const shortMonths = ["ม.ค.","ก.พ.","มี.ค.","เม.ย.","พ.ค.","มิ.ย.","ก.ค.","ส.ค.","ก.ย.","ต.ค.","พ.ย.","ธ.ค."];
+  return `${d.getDate()} ${shortMonths[d.getMonth()]} ${d.getFullYear()}`;
+}
+
+function escapeHtml(str) {
+  const div = document.createElement("div");
+  div.textContent = str;
+  return div.innerHTML;
+}
+
+// ===================== การคำนวณยอดสรุปรายเดือน (Core Logic) =====================
+
+/**
+ * คำนวณยอดรวมรายรับ, รายจ่าย (แยกจำเป็น/บันเทิง) และยอดคงเหลือสุทธิของเดือนที่ดูอยู่
+ * ยอดคงเหลือ = รายรับรวม - รายจ่ายรวม
+ */
+function calculateMonthlySummary(transactions) {
+  let totalIncome = 0, totalExpense = 0, necessaryTotal = 0, entertainTotal = 0;
+
+  for (const t of transactions) {
+    if (t.type === "income") {
+      totalIncome += t.amount;
+    } else {
+      totalExpense += t.amount;
+      if (t.category === "entertainment") entertainTotal += t.amount;
+      else necessaryTotal += t.amount; // ค่าเริ่มต้นถือเป็นรายจ่ายจำเป็นถ้าไม่ได้ระบุหมวด
+    }
+  }
+
+  return {
+    totalIncome, totalExpense, necessaryTotal, entertainTotal,
+    netBalance: totalIncome - totalExpense
+  };
+}
+
+// ===================== การ Render หน้าจอ (View Layer) =====================
+
+function renderMonthLabel() {
+  document.getElementById("currentMonthLabel").textContent =
+    `${THAI_MONTHS[currentViewDate.getMonth()]} ${currentViewDate.getFullYear()}`;
+}
+
+function renderDashboard(summary) {
+  document.getElementById("totalIncome").textContent = formatCurrency(summary.totalIncome);
+  document.getElementById("totalExpense").textContent = formatCurrency(summary.totalExpense);
+  document.getElementById("necessaryAmt").textContent = formatCurrencyShort(summary.necessaryTotal);
+  document.getElementById("entertainAmt").textContent = formatCurrencyShort(summary.entertainTotal);
+
+  // แถบสัดส่วนจำเป็น vs บันเทิง (คิดเป็น % ของรายจ่ายรวม)
+  const total = summary.totalExpense || 1; // กันหารด้วยศูนย์
+  const necPct = summary.totalExpense === 0 ? 0 : (summary.necessaryTotal / total) * 100;
+  const entPct = summary.totalExpense === 0 ? 0 : (summary.entertainTotal / total) * 100;
+  document.getElementById("barNecessary").style.width = necPct + "%";
+  document.getElementById("barEntertain").style.width = entPct + "%";
+
+  const netEl = document.getElementById("netBalance");
+  const stampEl = document.getElementById("netStamp");
+  netEl.textContent = formatCurrency(summary.netBalance);
+
+  if (summary.netBalance < 0) {
+    netEl.style.color = "var(--rust)";
+    stampEl.classList.add("stamp-neg");
+    stampEl.textContent = "ติดลบ";
+  } else {
+    netEl.style.color = "var(--navy)";
+    stampEl.classList.remove("stamp-neg");
+    stampEl.textContent = "ปิดบัญชี";
+  }
+}
+
+function renderTable(transactions) {
+  const tbody = document.getElementById("entryTableBody");
+  const emptyState = document.getElementById("emptyState");
+  const entryCount = document.getElementById("entryCount");
+
+  tbody.innerHTML = "";
+  entryCount.textContent = `${transactions.length} รายการ`;
+
+  if (transactions.length === 0) {
+    emptyState.classList.remove("hidden");
+    return;
+  }
+  emptyState.classList.add("hidden");
+
+  for (const t of transactions) {
+    const isIncome = t.type === "income";
+    const catLabel = t.category === "entertainment" ? "🎈 บันเทิง" : "🔧 จำเป็น";
+    const catClass = t.category === "entertainment"
+      ? "bg-[var(--entertain-bg)] text-[var(--entertain)]"
+      : "bg-[var(--necessary-bg)] text-[var(--necessary)]";
+
+    const row = document.createElement("tr");
+    row.className = "ledger-row";
+    row.innerHTML = `
+      <td class="font-mono text-xs py-3 pr-3 whitespace-nowrap">${formatDateShort(t.date)}</td>
+      <td class="py-3 pr-3">
+        <div class="flex flex-col gap-1 items-start">
+          <span class="inline-block px-2 py-0.5 rounded-full text-xs font-500 ${isIncome ? "bg-[var(--green-bg)] text-[var(--green)]" : "bg-[var(--rust-bg)] text-[var(--rust)]"}">
+            ${isIncome ? "รายรับ" : "รายจ่าย"}
+          </span>
+          ${!isIncome ? `<span class="inline-block px-2 py-0.5 rounded-full text-[10px] font-500 ${catClass}">${catLabel}</span>` : ""}
+        </div>
+      </td>
+      <td class="py-3 pr-3">${escapeHtml(t.desc)}</td>
+      <td class="py-3 pr-3 text-right font-mono font-500 ${isIncome ? "text-[var(--green)]" : "text-[var(--rust)]"}">
+        ${isIncome ? "+" : "-"}${formatCurrency(t.amount)}
+      </td>
+      <td class="py-3 pl-3 text-right">
+        <button data-id="${t.id}" class="deleteBtn text-[var(--ink)]/40 hover:text-[var(--rust)] transition" aria-label="ลบรายการ">✕</button>
+      </td>
+    `;
+    tbody.appendChild(row);
+  }
+}
+
+function showStatus(message, isSuccess) {
+  const banner = document.getElementById("statusBanner");
+  banner.textContent = message;
+  banner.classList.remove("hidden");
+  banner.className = "text-sm rounded-lg px-4 py-2.5 text-center " +
+    (isSuccess ? "bg-[var(--green-bg)] text-[var(--green)]" : "bg-[var(--rust-bg)] text-[var(--rust)]");
+  clearTimeout(banner._hideTimer);
+  banner._hideTimer = setTimeout(() => banner.classList.add("hidden"), 4000);
+}
+
+function refreshView() {
+  renderMonthLabel();
+  const monthTransactions = getVisibleTransactionsForCurrentMonth();
+  const summary = calculateMonthlySummary(monthTransactions);
+  renderDashboard(summary);
+  renderTable(monthTransactions);
+}
+
+// ===================== การซิงค์ข้อมูลข้ามอุปกรณ์ (kvdb.io) =====================
+
+function monthKey(year, month) {
+  return `tx-${year}-${String(month + 1).padStart(2, "0")}`;
+}
+
+/** รวมรายการสองชุดเข้าด้วยกัน โดยยึดเวอร์ชันที่มี updatedAt ล่าสุดเป็นหลัก (แก้ไข/ลบล่าสุดชนะ) */
+function mergeTransactionArrays(arrA, arrB) {
+  const map = new Map();
+  for (const t of arrA) map.set(t.id, t);
+  for (const t of arrB) {
+    const existing = map.get(t.id);
+    if (!existing || (t.updatedAt || 0) >= (existing.updatedAt || 0)) map.set(t.id, t);
+  }
+  return Array.from(map.values());
+}
+
+/** แทนที่ข้อมูลของเดือนหนึ่งในอาเรย์เต็ม โดยไม่แตะต้องเดือนอื่น */
+function replaceMonthInFullArray(fullArray, year, month, mergedMonthArray) {
+  const others = fullArray.filter(t => !isInMonth(t, year, month));
+  return others.concat(mergedMonthArray);
+}
+
+async function kvdbGetMonth(year, month) {
+  const res = await fetch(`${KVDB_BASE}/${syncBucket}/${monthKey(year, month)}`);
+  if (res.status === 404) return [];
+  if (!res.ok) throw new Error("อ่านข้อมูลจากเซิร์ฟเวอร์ไม่สำเร็จ (HTTP " + res.status + ")");
+  const text = await res.text();
+  return text ? JSON.parse(text) : [];
+}
+
+async function kvdbPutMonth(year, month, arr) {
+  const res = await fetch(`${KVDB_BASE}/${syncBucket}/${monthKey(year, month)}`, {
+    method: "PUT",
+    body: JSON.stringify(arr)
+  });
+  if (!res.ok) throw new Error("ส่งข้อมูลขึ้นเซิร์ฟเวอร์ไม่สำเร็จ (HTTP " + res.status + ")");
+}
+
+/** ดึงข้อมูลเดือนที่ระบุจากเซิร์ฟเวอร์ รวมกับข้อมูลในเครื่อง แล้วบันทึกทั้งสองฝั่งให้ตรงกัน */
+async function syncMonth(year, month, { silent = false } = {}) {
+  if (!syncBucket) return null;
+  try {
+    const remoteArr = await kvdbGetMonth(year, month);
+    const fullLocal = loadTransactions();
+    const localMonthArr = getRawMonthEntries(fullLocal, year, month);
+    const merged = mergeTransactionArrays(localMonthArr, remoteArr);
+
+    saveTransactions(replaceMonthInFullArray(fullLocal, year, month, merged));
+    await kvdbPutMonth(year, month, merged); // ส่งผลลัพธ์ที่ merge แล้วกลับขึ้นเซิร์ฟเวอร์ด้วย เพื่อให้ทุกฝั่งเห็นตรงกัน
+
+    localStorage.setItem("budget_last_synced", String(Date.now()));
+    return merged;
+  } catch (err) {
+    console.error("ซิงค์ไม่สำเร็จ:", err);
+    if (!silent) showStatus("ซิงค์ไม่สำเร็จ: " + err.message + " (ตรวจสอบอินเทอร์เน็ตแล้วลองใหม่)", false);
+    return null;
+  }
+}
+
+/** ส่งข้อมูลเดือนปัจจุบัน (รวมรายการที่ถูกลบ) ขึ้นเซิร์ฟเวอร์ทันทีหลังมีการแก้ไข */
+async function pushCurrentMonth() {
+  if (!syncBucket) return;
+  const year = currentViewDate.getFullYear(), month = currentViewDate.getMonth();
+  try {
+    const raw = getRawMonthEntries(loadTransactions(), year, month);
+    await kvdbPutMonth(year, month, raw);
+    localStorage.setItem("budget_last_synced", String(Date.now()));
+  } catch (err) {
+    console.error("ส่งข้อมูลซิงค์ไม่สำเร็จ:", err);
+    showStatus("บันทึกในเครื่องสำเร็จ แต่ซิงค์ขึ้นเซิร์ฟเวอร์ไม่สำเร็จ (จะลองใหม่ครั้งถัดไป)", false);
+  }
+}
+
+/** ตอนสร้างรหัสซิงค์ใหม่ครั้งแรก: ส่งข้อมูลทุกเดือนที่มีอยู่ในเครื่องขึ้นเซิร์ฟเวอร์ */
+async function pushAllMonths() {
+  const all = loadTransactions();
+  const groups = new Map(); // key: "year-month" -> array
+  for (const t of all) {
+    const d = new Date(t.date + "T00:00:00");
+    const gk = `${d.getFullYear()}-${d.getMonth()}`;
+    if (!groups.has(gk)) groups.set(gk, []);
+    groups.get(gk).push(t);
+  }
+  for (const [gk, arr] of groups.entries()) {
+    const [y, m] = gk.split("-").map(Number);
+    await kvdbPutMonth(y, m, arr);
+  }
+}
+
+function updateSyncButtonUI() {
+  const dot = document.getElementById("syncDot");
+  const label = document.getElementById("syncLabel");
+  if (syncBucket) {
+    dot.className = "sync-dot on";
+    label.textContent = "☁️ ซิงค์อยู่";
+  } else {
+    dot.className = "sync-dot off";
+    label.textContent = "☁️ ยังไม่ซิงค์";
+  }
+}
+
+function updateSyncModalView() {
+  const connected = !!syncBucket;
+  document.getElementById("syncDisconnectedView").classList.toggle("hidden", connected);
+  document.getElementById("syncConnectedView").classList.toggle("hidden", !connected);
+  if (connected) {
+    document.getElementById("syncCodeDisplay").value = syncBucket;
+    const lastSynced = localStorage.getItem("budget_last_synced");
+    document.getElementById("lastSyncedText").textContent = lastSynced
+      ? "ซิงค์ล่าสุดเมื่อ " + new Date(Number(lastSynced)).toLocaleString("th-TH")
+      : "ยังไม่เคยซิงค์สำเร็จ";
+  }
+  updateSyncButtonUI();
+}
+
+function startSyncPolling() {
+  clearInterval(syncPollTimer);
+  if (!syncBucket) return;
+  // ดึงข้อมูลของเดือนที่กำลังดูอยู่ใหม่ทุก 20 วินาที เพื่อให้เห็นรายการจากอุปกรณ์อื่นโดยไม่ต้องกดเอง
+  syncPollTimer = setInterval(async () => {
+    await syncMonth(currentViewDate.getFullYear(), currentViewDate.getMonth(), { silent: true });
+    refreshView();
+  }, 20000);
+}
+
+// ===================== Event Handlers: การนำทางเดือน =====================
+
+document.getElementById("prevMonthBtn").addEventListener("click", async () => {
+  currentViewDate.setMonth(currentViewDate.getMonth() - 1);
+  refreshView();
+  if (syncBucket) { await syncMonth(currentViewDate.getFullYear(), currentViewDate.getMonth(), { silent: true }); refreshView(); }
+});
+
+document.getElementById("nextMonthBtn").addEventListener("click", async () => {
+  currentViewDate.setMonth(currentViewDate.getMonth() + 1);
+  refreshView();
+  if (syncBucket) { await syncMonth(currentViewDate.getFullYear(), currentViewDate.getMonth(), { silent: true }); refreshView(); }
+});
+
+// ===================== Event Handlers: ฟอร์ม (ประเภท/หมวดรายจ่าย) =====================
+
+const typeIncomeRadio = document.getElementById("typeIncome");
+const typeExpenseRadio = document.getElementById("typeExpense");
+const categoryField = document.getElementById("categoryField");
+
+function toggleCategoryField() {
+  categoryField.classList.toggle("hidden", !typeExpenseRadio.checked);
+}
+typeIncomeRadio.addEventListener("change", toggleCategoryField);
+typeExpenseRadio.addEventListener("change", toggleCategoryField);
+
+// ===================== Event Handlers: บันทึกรายการใหม่ =====================
+
+document.getElementById("entryForm").addEventListener("submit", async (e) => {
+  e.preventDefault();
+
+  const date = document.getElementById("entryDate").value;
+  const type = document.querySelector('input[name="entryType"]:checked').value;
+  const amount = parseFloat(document.getElementById("entryAmount").value);
+  const desc = document.getElementById("entryDesc").value.trim();
+  const category = type === "expense"
+    ? document.querySelector('input[name="entryCategory"]:checked').value
+    : null;
+
+  if (!date || !desc || isNaN(amount) || amount <= 0) {
+    showStatus("กรุณากรอกข้อมูลให้ครบถ้วนและถูกต้องก่อนบันทึก", false);
+    return;
+  }
+
+  const transactions = loadTransactions();
+  transactions.push({
+    id: Date.now().toString(36) + Math.random().toString(36).slice(2, 6),
+    date, type, category, amount, desc,
+    updatedAt: Date.now(),
+    deleted: false
+  });
+
+  const saved = saveTransactions(transactions);
+  if (!saved) {
+    showStatus("บันทึกไม่สำเร็จ: เบราว์เซอร์นี้บล็อกการจัดเก็บข้อมูล (ลองปิดโหมดส่วนตัว/Incognito แล้วลองอีกครั้ง)", false);
+    return;
+  }
+
+  const enteredDate = new Date(date + "T00:00:00");
+  currentViewDate = new Date(enteredDate.getFullYear(), enteredDate.getMonth(), 1);
+
+  e.target.reset();
+  document.getElementById("entryDate").value = date;
+  document.getElementById("typeIncome").checked = true;
+  toggleCategoryField();
+
+  showStatus("บันทึกรายการเรียบร้อยแล้ว", true);
+  refreshView();
+
+  if (syncBucket) await pushCurrentMonth();
+});
+
+// ===================== Event Handlers: ลบรายการ (soft-delete) =====================
+
+document.getElementById("entryTableBody").addEventListener("click", async (e) => {
+  const btn = e.target.closest(".deleteBtn");
+  if (!btn) return;
+
+  const id = btn.dataset.id;
+  const transactions = loadTransactions();
+  const idx = transactions.findIndex(t => t.id === id);
+  if (idx === -1) return;
+
+  // ทำ soft-delete แทนการลบออกจากอาเรย์จริงๆ เพื่อให้การซิงค์รู้ว่ารายการนี้ถูกลบไปแล้ว
+  transactions[idx] = { ...transactions[idx], deleted: true, updatedAt: Date.now() };
+  saveTransactions(transactions);
+  refreshView();
+
+  if (syncBucket) await pushCurrentMonth();
+});
+
+// ===================== Event Handlers: ส่งออก/นำเข้าไฟล์สำรอง =====================
+
+function exportData() {
+  const transactions = loadTransactions();
+  if (transactions.length === 0) { showStatus("ยังไม่มีข้อมูลให้ส่งออก", false); return; }
+
+  const blob = new Blob([JSON.stringify(transactions, null, 2)], { type: "application/json" });
+  const url = URL.createObjectURL(blob);
+  const today = new Date();
+  const stamp = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, "0")}-${String(today.getDate()).padStart(2, "0")}`;
+
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = `budget-backup-${stamp}.json`;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+
+  showStatus(`ส่งออกข้อมูลสำเร็จ (${transactions.length} รายการ)`, true);
+}
+
+function importDataFromFile(file) {
+  const reader = new FileReader();
+  reader.onload = (event) => {
+    let imported;
+    try { imported = JSON.parse(event.target.result); }
+    catch (err) { showStatus("ไฟล์ที่เลือกไม่ใช่ไฟล์ข้อมูลที่ถูกต้อง (อ่านเป็น JSON ไม่ได้)", false); return; }
+
+    if (!Array.isArray(imported)) { showStatus("รูปแบบไฟล์ไม่ถูกต้อง: ไม่พบรายการข้อมูล", false); return; }
+
+    const isValidEntry = t => t && typeof t.date === "string" && (t.type === "income" || t.type === "expense") && typeof t.amount === "number";
+    const validEntries = imported.filter(isValidEntry);
+    if (validEntries.length === 0) { showStatus("ไม่พบรายการที่ถูกต้องในไฟล์นี้", false); return; }
+
+    const existing = loadTransactions();
+    const merged = mergeTransactionArrays(existing, validEntries.map(t => ({
+      ...t,
+      id: t.id || (Date.now().toString(36) + Math.random().toString(36).slice(2, 6)),
+      updatedAt: t.updatedAt || Date.now()
+    })));
+
+    const saved = saveTransactions(merged);
+    if (!saved) { showStatus("นำเข้าไม่สำเร็จ: บันทึกลง LocalStorage ของอุปกรณ์นี้ไม่ได้", false); return; }
+
+    showStatus(`นำเข้าข้อมูลสำเร็จ (รวมทั้งหมด ${merged.length} รายการในเครื่อง)`, true);
+    refreshView();
+  };
+  reader.onerror = () => showStatus("อ่านไฟล์ไม่สำเร็จ กรุณาลองใหม่อีกครั้ง", false);
+  reader.readAsText(file);
+}
+
+document.getElementById("exportBtn").addEventListener("click", exportData);
+document.getElementById("importBtn").addEventListener("click", () => document.getElementById("importFileInput").click());
+document.getElementById("importFileInput").addEventListener("change", (e) => {
+  const file = e.target.files[0];
+  if (file) importDataFromFile(file);
+  e.target.value = "";
+});
+
+// ===================== Event Handlers: Modal ซิงค์ข้อมูล =====================
+
+const syncModalOverlay = document.getElementById("syncModalOverlay");
+
+document.getElementById("openSyncBtn").addEventListener("click", () => {
+  updateSyncModalView();
+  syncModalOverlay.classList.remove("hidden");
+});
+document.getElementById("closeSyncBtn").addEventListener("click", () => syncModalOverlay.classList.add("hidden"));
+syncModalOverlay.addEventListener("click", (e) => { if (e.target === syncModalOverlay) syncModalOverlay.classList.add("hidden"); });
+
+document.getElementById("createSyncBtn").addEventListener("click", async (e) => {
+  const btn = e.target;
+  btn.disabled = true; btn.textContent = "⏳ กำลังสร้างรหัส...";
+  try {
+    const res = await fetch(`${KVDB_BASE}/`, {
+      method: "POST",
+      headers: { "Content-Type": "application/x-www-form-urlencoded" },
+      body: "default_ttl=0"
+    });
+    if (!res.ok) throw new Error("HTTP " + res.status);
+    const bucketId = (await res.text()).trim();
+
+    syncBucket = bucketId;
+    localStorage.setItem(SYNC_KEY, bucketId);
+
+    await pushAllMonths(); // อัปโหลดข้อมูลเดิมทั้งหมดในเครื่องนี้ขึ้นเซิร์ฟเวอร์
+    localStorage.setItem("budget_last_synced", String(Date.now()));
+
+    updateSyncModalView();
+    startSyncPolling();
+    showStatus("สร้างรหัสซิงค์สำเร็จ! นำรหัสนี้ไปกรอกในอุปกรณ์อื่นได้เลย", true);
+  } catch (err) {
+    showStatus("สร้างรหัสซิงค์ไม่สำเร็จ: " + err.message + " (ตรวจสอบการเชื่อมต่ออินเทอร์เน็ต)", false);
+  } finally {
+    btn.disabled = false; btn.textContent = "🆕 สร้างรหัสซิงค์ใหม่ (เครื่องแรก)";
+  }
+});
+
+document.getElementById("connectSyncBtn").addEventListener("click", async (e) => {
+  const code = document.getElementById("syncCodeInput").value.trim();
+  if (!code) { showStatus("กรุณากรอกรหัสซิงค์ก่อน", false); return; }
+
+  const btn = e.target;
+  btn.disabled = true; btn.textContent = "⏳ กำลังเชื่อมต่อ...";
+  try {
+    syncBucket = code;
+    localStorage.setItem(SYNC_KEY, code);
+
+    await syncMonth(currentViewDate.getFullYear(), currentViewDate.getMonth());
+    refreshView();
+    updateSyncModalView();
+    startSyncPolling();
+    showStatus("เชื่อมต่อรหัสซิงค์สำเร็จ!", true);
+  } catch (err) {
+    showStatus("เชื่อมต่อไม่สำเร็จ: " + err.message, false);
+  } finally {
+    btn.disabled = false; btn.textContent = "เชื่อมต่อ";
+  }
+});
+
+document.getElementById("manualSyncBtn").addEventListener("click", async (e) => {
+  const btn = e.target;
+  btn.disabled = true; btn.textContent = "⏳ กำลังซิงค์...";
+  await syncMonth(currentViewDate.getFullYear(), currentViewDate.getMonth());
+  refreshView();
+  updateSyncModalView();
+  showStatus("ซิงค์ข้อมูลเรียบร้อยแล้ว", true);
+  btn.disabled = false; btn.textContent = "🔄 ซิงค์ตอนนี้";
+});
+
+document.getElementById("disconnectSyncBtn").addEventListener("click", () => {
+  syncBucket = null;
+  localStorage.removeItem(SYNC_KEY);
+  clearInterval(syncPollTimer);
+  updateSyncModalView();
+  showStatus("ยกเลิกการซิงค์แล้ว ข้อมูลในเครื่องนี้ยังอยู่ครบ", true);
+});
+
+document.getElementById("copySyncBtn").addEventListener("click", async () => {
+  const input = document.getElementById("syncCodeDisplay");
+  input.select();
+  try {
+    await navigator.clipboard.writeText(input.value);
+    showStatus("คัดลอกรหัสซิงค์แล้ว", true);
+  } catch (err) {
+    showStatus("คัดลอกอัตโนมัติไม่สำเร็จ กรุณาเลือกข้อความแล้วคัดลอกเอง", false);
+  }
+});
+
+// ===================== เริ่มต้นโปรแกรม (Init) =====================
+
+(async function init() {
+  const today = new Date();
+  const yyyy = today.getFullYear();
+  const mm = String(today.getMonth() + 1).padStart(2, "0");
+  const dd = String(today.getDate()).padStart(2, "0");
+  document.getElementById("entryDate").value = `${yyyy}-${mm}-${dd}`;
+
+  updateSyncButtonUI();
+  refreshView();
+
+  if (syncBucket) {
+    await syncMonth(currentViewDate.getFullYear(), currentViewDate.getMonth(), { silent: true });
+    refreshView();
+    startSyncPolling();
+  }
+})();
+</script>
+</body>
+</html>
