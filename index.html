@@ -268,6 +268,11 @@
     <!-- สถานะยังไม่เชื่อมต่อ -->
     <div id="syncDisconnectedView" class="space-y-4">
       <div>
+        <label class="text-xs font-500 text-[var(--ink)]/70">อีเมล (ใช้ยืนยันความเป็นเจ้าของรหัสซิงค์เท่านั้น ไม่ส่งอะไรให้)</label>
+        <input id="syncEmailInput" type="email" placeholder="you@example.com"
+          class="w-full mt-1.5 border border-[var(--line)] rounded-lg px-3 py-2 bg-white text-sm focus:ring-2 focus:ring-[var(--gold)] focus:outline-none">
+      </div>
+      <div>
         <button id="createSyncBtn" type="button" class="w-full toolbar-btn bg-[var(--navy)] hover:bg-[var(--navy-2)] text-white text-sm font-500 px-4 py-2.5 rounded-lg">🆕 สร้างรหัสซิงค์ใหม่ (เครื่องแรก)</button>
         <p class="text-[11px] text-[var(--ink)]/50 mt-1.5">กดจากอุปกรณ์เครื่องแรกที่มีข้อมูลอยู่แล้ว จะได้รหัสมาไปกรอกในเครื่องอื่น</p>
       </div>
@@ -806,13 +811,19 @@ document.getElementById("closeSyncBtn").addEventListener("click", () => syncModa
 syncModalOverlay.addEventListener("click", (e) => { if (e.target === syncModalOverlay) syncModalOverlay.classList.add("hidden"); });
 
 document.getElementById("createSyncBtn").addEventListener("click", async (e) => {
+  const email = document.getElementById("syncEmailInput").value.trim();
+  if (!email || !email.includes("@")) {
+    showStatus("กรุณากรอกอีเมลให้ถูกต้องก่อนสร้างรหัสซิงค์ (kvdb.io บังคับใช้ยืนยันความเป็นเจ้าของ)", false);
+    return;
+  }
+
   const btn = e.target;
   btn.disabled = true; btn.textContent = "⏳ กำลังสร้างรหัส...";
   try {
     const res = await fetch(`${KVDB_BASE}/`, {
       method: "POST",
       headers: { "Content-Type": "application/x-www-form-urlencoded" },
-      body: ""
+      body: "email=" + encodeURIComponent(email)
     });
     if (!res.ok) throw new Error("HTTP " + res.status);
     const bucketId = (await res.text()).trim();
