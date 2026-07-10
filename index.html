@@ -263,7 +263,7 @@
       <h3 class="font-display text-xl font-700 text-[var(--navy)]">☁️ ซิงค์ข้อมูลข้ามอุปกรณ์</h3>
       <button id="closeSyncBtn" aria-label="ปิด" class="text-[var(--ink)]/50 hover:text-[var(--ink)] text-xl leading-none">✕</button>
     </div>
-    <p class="text-xs text-[var(--ink)]/60 mb-4">ใช้ "รหัสซิงค์" เดียวกันในทุกอุปกรณ์ (Windows, iPhone, iPad ฯลฯ) เพื่อให้ข้อมูลอัปเดตตรงกัน ข้อมูลจะถูกเก็บไว้บนเซิร์ฟเวอร์ฟรีของบุคคลที่สาม (kvdb.io) แบบไม่เข้ารหัส — ห้ามแชร์รหัสนี้กับผู้อื่น และไม่ควรใช้กับข้อมูลอ่อนไหวมาก</p>
+    <p class="text-xs text-[var(--ink)]/60 mb-4">ใช้ "รหัสซิงค์" เดียวกันในทุกอุปกรณ์ (Windows, iPhone, iPad ฯลฯ) เพื่อให้ข้อมูลอัปเดตตรงกัน ข้อมูลจะถูกเก็บไว้บนเซิร์ฟเวอร์ฟรีของบุคคลที่สาม (kvdb.io) แบบไม่เข้ารหัส — ห้ามแชร์รหัสนี้กับผู้อื่น และไม่ควรใช้กับข้อมูลอ่อนไหวมาก (แพ็กเกจฟรีจะเก็บข้อมูลแต่ละเดือนไว้ 7 วันนับจากที่ซิงค์ครั้งล่าสุด ถ้าไม่ได้เปิดแอปซิงค์เกิน 1 สัปดาห์ ข้อมูลบนคลาวด์ของเดือนนั้นอาจหมดอายุ แต่ข้อมูลในเครื่องของคุณจะปลอดภัยอยู่เสมอไม่ว่ากรณีใด)</p>
 
     <!-- สถานะยังไม่เชื่อมต่อ -->
     <div id="syncDisconnectedView" class="space-y-4">
@@ -812,7 +812,7 @@ document.getElementById("createSyncBtn").addEventListener("click", async (e) => 
     const res = await fetch(`${KVDB_BASE}/`, {
       method: "POST",
       headers: { "Content-Type": "application/x-www-form-urlencoded" },
-      body: "default_ttl=0"
+      body: ""
     });
     if (!res.ok) throw new Error("HTTP " + res.status);
     const bucketId = (await res.text()).trim();
